@@ -28,7 +28,9 @@ def save_plot(filename=None):
         bbox_inches="tight"
     )
 
-files = ["4mm.csv", "14mm.csv", "100mm.csv", "140mm.csv"]
+files = ["4mm.csv", "14mm.csv", "100mm.csv", "70mm.csv", "140mm.csv", "180mm.csv"]
+
+all_valid_fits = {}
 
 for file in files:
     CSV_PATH = f"../{file}"
@@ -205,16 +207,22 @@ for file in files:
     def gauss(x, mean, sigma):
         return 1/(sigma * np.sqrt(2 * np.pi)) * np.exp(- (x - mean)**2 / (2 * sigma**2))
 
-    def fit_gauss(times, bins="auto"):
+    def fit_gauss(times, bins="auto", return_errors=False):
         # Gauss-Fit (def gauss) an das normierte Histogramm der Schwellenzeiten
         hist, edges = np.histogram(times, bins=bins, density=True)
         centers = 0.5 * (edges[:-1] + edges[1:])
 
         p0 = [np.mean(times), np.std(times, ddof=1)]
         try:
-            popt, _ = curve_fit(gauss, centers, hist, p0=p0)
+            popt, pcov = curve_fit(gauss, centers, hist, p0=p0)
         except (RuntimeError, ValueError):
-            return np.nan, np.nan
+            return (np.nan,) * (4 if return_errors else 2)
+
+        if return_errors:
+            # Unsichere Kovarianz (inf) wird zu NaN, dann fehlt nur der Fehlerbalken
+            perr = np.sqrt(np.diag(pcov))
+            perr = np.where(np.isfinite(perr), perr, np.nan)
+            return popt[0], abs(popt[1]), perr[0], perr[1]
 
         return popt[0], abs(popt[1])
 
@@ -294,13 +302,17 @@ for file in files:
 
     for threshold in cumulative_photon_thresholds:
         diff = threshold_times["Difference"][threshold].dropna().to_numpy(dtype=float)
-        fit_mean, fit_sigma = fit_gauss(diff) if len(diff) > 1 else (np.nan, np.nan)
+        fit_mean, fit_sigma, mean_err, sigma_err = (
+            fit_gauss(diff, return_errors=True) if len(diff) > 1 else (np.nan,) * 4
+        )
         edges = np.histogram_bin_edges(diff, bins="auto") if len(diff) > 1 else [np.nan, np.nan]
         difference_fits.append({
             "Threshold": threshold,
             "Events": len(diff),
             "Mean_ns": fit_mean,
+            "MeanErr_ns": mean_err,
             "Sigma_ps": fit_sigma * 1000,
+            "SigmaErr_ps": sigma_err * 1000,
             "BinWidth_ns": edges[1] - edges[0],
         })
 
@@ -311,11 +323,19 @@ for file in files:
 
     fig, ax_sigma = plt.subplots(figsize=(7, 5))
 
-    ax_sigma.plot(valid_fits["Threshold"], valid_fits["Sigma_ps"], "o-", color="steelblue", linewidth=0.0)
+    ax_sigma.errorbar(
+        valid_fits["Threshold"],
+        valid_fits["Sigma_ps"],
+        yerr=valid_fits["SigmaErr_ps"],
+        fmt="o",
+        color="steelblue",
+        capsize=3,
+    )
     first_event_id = data["EventID"].min()
     scintillator_length = data.loc[
         data["EventID"] == first_event_id, "ScintillatorLenght"
     ].iloc[0]
+    all_valid_fits[scintillator_length] = valid_fits
     ax_sigma.set_title(f"Sigma of Difference against Threshold (Length = {scintillator_length} mm)")
     ax_sigma.set_xlabel("photon threshold N")
     ax_sigma.set_ylabel("$\sigma$ / ps")
@@ -353,3 +373,29 @@ for file in files:
     print(f"Finished plotting threshold difference Gaussian sigma: {scintillator_length} mm")
 
     difference_fits.round(4).to_string(index=False)
+
+# Alle Längen in einem Plot
+fig, ax_all = plt.subplots(figsize=(9, 6))
+
+colors = plt.cm.viridis(np.linspace(0, 1, len(all_valid_fits)))
+
+for color, (length, fits) in zip(colors, sorted(all_valid_fits.items())):
+    ax_all.errorbar(
+        fits["Threshold"],
+        fits["Sigma_ps"],
+        yerr=fits["SigmaErr_ps"],
+        fmt="o",
+        color=color,
+        capsize=3,
+        label=f"{length} mm",
+    )
+
+ax_all.set_title("Sigma of Difference against Threshold (all lengths)")
+ax_all.set_xlabel("photon threshold N")
+ax_all.set_ylabel(r"$\sigma$ / ps")
+ax_all.grid(alpha=0.3)
+ax_all.legend(title="Scintillator length")
+
+fig.tight_layout()
+save_plot("threshold_difference_gauss_sigma_all_lengths")
+# plt.show()
