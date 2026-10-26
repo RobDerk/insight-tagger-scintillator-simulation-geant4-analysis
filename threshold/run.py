@@ -8,7 +8,9 @@ from scipy.optimize import curve_fit
 from scipy.stats import norm
 from scipy.stats import moyal
 
-PLOTS_DIR = Path("plots")
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+PLOTS_DIR = SCRIPT_DIR / "plots"
 PLOTS_DIR.mkdir(exist_ok=True)
 
 def save_plot(filename=None):
@@ -32,8 +34,29 @@ files = ["4mm.csv", "14mm.csv", "100mm.csv", "70mm.csv", "140mm.csv", "180mm.csv
 
 all_valid_fits = {}
 
-for file in files:
-    CSV_PATH = f"../{file}"
+# Je ein Bild für alle Längen, ein Teilplot pro Länge (nach Länge sortiert)
+files = sorted(files, key=lambda name: float(name.removesuffix("mm.csv")))
+
+scatter_specs = [
+    ("TrackLenght", "track length / mm", "tracklength"),
+    ("NSideReflections", "number of side reflections", "side_reflections"),
+]
+scatter_n_cols = 3
+scatter_n_rows = int(np.ceil(len(files) / scatter_n_cols))
+scatter_figures = {}
+
+for column, _, _ in scatter_specs:
+    scatter_fig, scatter_axes = plt.subplots(
+        scatter_n_rows, scatter_n_cols,
+        figsize=(5 * scatter_n_cols, 4 * scatter_n_rows),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+    scatter_figures[column] = (scatter_fig, scatter_axes.ravel())
+
+for file_index, file in enumerate(files):
+    CSV_PATH = SCRIPT_DIR.parent / file
 
     print(f"Loading CSV file: {CSV_PATH}")
 
@@ -335,20 +358,21 @@ for file in files:
     scintillator_length = data.loc[
         data["EventID"] == first_event_id, "ScintillatorLenght"
     ].iloc[0]
-    all_valid_fits[scintillator_length] = valid_fits
+    all_valid_fits[float(scintillator_length)] = valid_fits
     ax_sigma.set_title(f"Sigma of Difference against Threshold (Length = {scintillator_length} mm)")
     ax_sigma.set_xlabel("photon threshold N")
     ax_sigma.set_ylabel("$\sigma$ / ps")
     ax_sigma.grid(alpha=0.3)
 
-    stats_text = " N    Mean / ns    Sigma / ps\n"
-    stats_text += "-" * 32 + "\n"
+    stats_text = " N    Mean / ns    Sigma / ps    Err / ps\n"
+    stats_text += "-" * 44 + "\n"
 
     for _, row in valid_fits.iterrows():
         stats_text += (
             f"{int(row['Threshold']):3d}   "
             f"{row['Mean_ns']:8.4f}     "
-            f"{row['Sigma_ps']:8.2f}\n"
+            f"{row['Sigma_ps']:8.2f}     "
+            f"{row['SigmaErr_ps']:8.2f}\n"
         )
 
     ax_sigma.text(
@@ -366,36 +390,82 @@ for file in files:
         )
     )
 
+    # Platz oben für die Tabelle: Daten belegen nur die untere Hälfte
+    y_low, y_high = ax_sigma.get_ylim()
+    ax_sigma.set_ylim(y_low, y_low + (y_high - y_low) / 0.5)
+
     fig.tight_layout()
     save_plot(f"threshold_difference_gauss_sigma_{scintillator_length}mm")
     # plt.show()
 
     print(f"Finished plotting threshold difference Gaussian sigma: {scintillator_length} mm")
 
+    for column, x_label, _ in scatter_specs:
+        ax = scatter_figures[column][1][file_index]
+        ax.scatter(data[column], data["TimeSinceZero"], s=2, alpha=0.1)
+        ax.set_title(f"Length = {scintillator_length:g} mm")
+        ax.set_xlabel(x_label)
+        ax.set_ylabel("time since zero / ns")
+        ax.tick_params(labelbottom=True, labelleft=True)
+        ax.grid(alpha=0.3)
+
     difference_fits.round(4).to_string(index=False)
 
+for column, x_label, name in scatter_specs:
+    scatter_fig, scatter_axes = scatter_figures[column]
+
+    for unused_ax in scatter_axes[len(files):]:
+        unused_ax.set_visible(False)
+
+    scatter_fig.suptitle(f"Arrival time vs {x_label.split(' /')[0]}")
+    scatter_fig.tight_layout()
+    plt.figure(scatter_fig.number)
+    save_plot(f"time_vs_{name}_all_lengths")
+    plt.close(scatter_fig)
+
+# Feste Farbe und Marker pro Länge, damit sie in beiden Plots gleich sind
+length_styles = {
+    length: (plt.cm.tab10(i), "osv^Dp"[i % 6])
+    for i, length in enumerate(sorted(all_valid_fits))
+}
+
+def plot_lengths(lengths, title, filename):
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    for length in lengths:
+        color, marker = length_styles[length]
+        fits = all_valid_fits[length]
+        ax.errorbar(
+            fits["Threshold"],
+            fits["Sigma_ps"],
+            yerr=fits["SigmaErr_ps"],
+            fmt=marker,
+            color=color,
+            capsize=3,
+            label=f"{length:g} mm",
+        )
+
+    ax.set_title(title)
+    ax.set_xlabel("photon threshold N")
+    ax.set_ylabel(r"$\sigma$ / ps")
+    ax.grid(alpha=0.3)
+    ax.legend(title="Scintillator length")
+
+    fig.tight_layout()
+    save_plot(filename)
+    # plt.show()
+
 # Alle Längen in einem Plot
-fig, ax_all = plt.subplots(figsize=(9, 6))
+plot_lengths(
+    sorted(all_valid_fits),
+    "Sigma of Difference against Threshold (all lengths)",
+    "threshold_difference_gauss_sigma_all_lengths",
+)
 
-colors = plt.cm.viridis(np.linspace(0, 1, len(all_valid_fits)))
-
-for color, (length, fits) in zip(colors, sorted(all_valid_fits.items())):
-    ax_all.errorbar(
-        fits["Threshold"],
-        fits["Sigma_ps"],
-        yerr=fits["SigmaErr_ps"],
-        fmt="o",
-        color=color,
-        capsize=3,
-        label=f"{length} mm",
-    )
-
-ax_all.set_title("Sigma of Difference against Threshold (all lengths)")
-ax_all.set_xlabel("photon threshold N")
-ax_all.set_ylabel(r"$\sigma$ / ps")
-ax_all.grid(alpha=0.3)
-ax_all.legend(title="Scintillator length")
-
-fig.tight_layout()
-save_plot("threshold_difference_gauss_sigma_all_lengths")
-# plt.show()
+# Auswahl an Längen
+selected_lengths = [14.0, 70.0, 140.0, 180.0]
+plot_lengths(
+    [length for length in selected_lengths if length in all_valid_fits],
+    "Sigma of Difference against Threshold (selected lengths)",
+    "threshold_difference_gauss_sigma_selected_lengths",
+)
