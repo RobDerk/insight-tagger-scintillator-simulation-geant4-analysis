@@ -9,6 +9,7 @@ from scipy.stats import norm
 from scipy.stats import moyal
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+DATA_DIR = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
 PLOTS_DIR = SCRIPT_DIR / "plots"
 PLOTS_DIR.mkdir(exist_ok=True)
@@ -37,6 +38,11 @@ all_valid_fits = {}
 # Je ein Bild für alle Längen, ein Teilplot pro Länge (nach Länge sortiert)
 files = sorted(files, key=lambda name: float(name.removesuffix("mm.csv")))
 
+missing_files = [name for name in files if not (DATA_DIR / name).exists()]
+if missing_files:
+    print(f"Skipping missing files in {DATA_DIR}: {', '.join(missing_files)}")
+files = [name for name in files if name not in missing_files]
+
 scatter_specs = [
     ("TrackLenght", "track length / mm", "tracklength"),
     ("NSideReflections", "number of side reflections", "side_reflections"),
@@ -56,7 +62,7 @@ for column, _, _ in scatter_specs:
     scatter_figures[column] = (scatter_fig, scatter_axes.ravel())
 
 for file_index, file in enumerate(files):
-    CSV_PATH = SCRIPT_DIR.parent / file
+    CSV_PATH = DATA_DIR / file
 
     print(f"Loading CSV file: {CSV_PATH}")
 
