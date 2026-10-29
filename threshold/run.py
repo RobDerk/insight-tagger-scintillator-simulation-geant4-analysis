@@ -9,7 +9,8 @@ from scipy.stats import norm
 from scipy.stats import moyal
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
+# DATA_DIR = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
+DATA_DIR = SCRIPT_DIR.parent / "data"
 
 PLOTS_DIR = SCRIPT_DIR / "plots"
 PLOTS_DIR.mkdir(exist_ok=True)
@@ -365,9 +366,12 @@ for file_index, file in enumerate(files):
         data["EventID"] == first_event_id, "ScintillatorLenght"
     ].iloc[0]
     all_valid_fits[float(scintillator_length)] = valid_fits
-    ax_sigma.set_title(f"Sigma of Difference against Threshold (Length = {scintillator_length} mm)")
+    ax_sigma.set_title(
+        rf"$\sigma$ of threshold-time difference $t_{{\mathrm{{top}}}} - t_{{\mathrm{{bottom}}}}$ vs photon threshold N "
+        f"(Length = {float(scintillator_length):g} mm)"
+    )
     ax_sigma.set_xlabel("photon threshold N")
-    ax_sigma.set_ylabel("$\sigma$ / ps")
+    ax_sigma.set_ylabel(r"$\sigma$ / ps")
     ax_sigma.grid(alpha=0.3)
 
     stats_text = " N    Mean / ns    Sigma / ps    Err / ps\n"
@@ -406,6 +410,66 @@ for file_index, file in enumerate(files):
 
     print(f"Finished plotting threshold difference Gaussian sigma: {scintillator_length} mm")
 
+    # Beispiel für die Gauss-Anpassung: Histogramm der Differenz bei N = 50 (nur 70 mm)
+    example_threshold = 50
+    if float(scintillator_length) == 70.0:
+        example_row = difference_fits[difference_fits["Threshold"] == example_threshold].iloc[0]
+        example_diff = threshold_times["Difference"][example_threshold].dropna().to_numpy(dtype=float)
+
+        fig, ax_fit = plt.subplots(figsize=(10, 5.5))
+        hist, edges = np.histogram(example_diff, bins="auto")
+        bin_width = edges[1] - edges[0]
+        ax_fit.stairs(hist, edges, color="C0", linewidth=2, label="threshold time differences")
+
+        fit_mean = example_row["Mean_ns"]
+        fit_sigma_ns = example_row["Sigma_ps"] / 1000
+        x_fit = np.linspace(edges[0], edges[-1], 500)
+        ax_fit.plot(
+            x_fit,
+            gauss(x_fit, fit_mean, fit_sigma_ns) * len(example_diff) * bin_width,
+            color="C1", linestyle="--", linewidth=2,
+            label=(
+                rf"Gaussian fit: $\mu = {fit_mean:.4f}$ ns, "
+                rf"$\sigma = {example_row['Sigma_ps']:.1f}$ ps"
+            ),
+        )
+
+        table_thresholds = [10, 30, 50, 80, 100, 120, 150, 200, 220, 250, 300]
+        table_fits = valid_fits[valid_fits["Threshold"].isin(table_thresholds)]
+        fit_text = " N    Mean / ns    Sigma / ps\n"
+        fit_text += "-" * 32 + "\n"
+        for _, row in table_fits.iterrows():
+            fit_text += (
+                f"{int(row['Threshold']):3d}   "
+                f"{row['Mean_ns']:8.4f}     "
+                f"{row['Sigma_ps']:8.2f}\n"
+            )
+        ax_fit.text(
+            0.02, 0.98,
+            fit_text.rstrip("\n"),
+            transform=ax_fit.transAxes,
+            fontsize=7,
+            fontfamily="monospace",
+            verticalalignment="top",
+            horizontalalignment="left",
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
+        )
+
+        ax_fit.set_title(
+            f"Threshold time difference distribution "
+            f"(N = {example_threshold} photons, Length = {scintillator_length:g} mm)"
+        )
+        ax_fit.set_xlabel(r"time threshold $t_{\mathrm{top}} - t_{\mathrm{bottom}}$ / ns")
+        ax_fit.set_ylabel("counts")
+        ax_fit.grid(alpha=0.3)
+        ax_fit.legend(loc="upper right")
+
+        y_low, y_high = ax_fit.get_ylim()
+        ax_fit.set_ylim(y_low, y_low + (y_high - y_low) / 0.94)
+
+        fig.tight_layout()
+        save_plot(f"threshold_{example_threshold}_difference_gaussian_fit_{scintillator_length:g}mm")
+
     for column, x_label, _ in scatter_specs:
         ax = scatter_figures[column][1][file_index]
         ax.scatter(data[column], data["TimeSinceZero"], s=2, alpha=0.1)
@@ -435,7 +499,7 @@ length_styles = {
     for i, length in enumerate(sorted(all_valid_fits))
 }
 
-def plot_lengths(lengths, title, filename):
+def plot_lengths(lengths, title, filename, table_threshold=None):
     fig, ax = plt.subplots(figsize=(9, 6))
 
     for length in lengths:
@@ -455,7 +519,39 @@ def plot_lengths(lengths, title, filename):
     ax.set_xlabel("photon threshold N")
     ax.set_ylabel(r"$\sigma$ / ps")
     ax.grid(alpha=0.3)
-    ax.legend(title="Scintillator length")
+    ax.legend(title="Scintillator length", loc="upper left")
+
+    if table_threshold is not None:
+        table_text = f"Length / mm   Sigma(N={table_threshold}) / ps\n"
+        table_text += "-" * 30 + "\n"
+        for length in lengths:
+            fits = all_valid_fits[length]
+            row = fits[fits["Threshold"] == table_threshold]
+            if row.empty:
+                table_text += f"{length:9g}       {'n/a':>10}\n"
+            else:
+                table_text += (
+                    f"{length:9g}       "
+                    f"{row['Sigma_ps'].iloc[0]:6.2f} ± {row['SigmaErr_ps'].iloc[0]:.2f}\n"
+                )
+
+        # Fester y-Bereich, Tabelle steht unter der Legende
+        ax.set_ylim(0, 750)
+
+        fig.tight_layout()
+        fig.canvas.draw()
+        legend_box = ax.get_legend().get_window_extent().transformed(ax.transAxes.inverted())
+
+        ax.text(
+            legend_box.x0, legend_box.y0 - 0.02,
+            table_text.rstrip("\n"),
+            transform=ax.transAxes,
+            fontsize=8,
+            fontfamily="monospace",
+            verticalalignment="top",
+            horizontalalignment="left",
+            bbox=dict(boxstyle="round", facecolor="white", alpha=0.85),
+        )
 
     fig.tight_layout()
     save_plot(filename)
@@ -464,14 +560,38 @@ def plot_lengths(lengths, title, filename):
 # Alle Längen in einem Plot
 plot_lengths(
     sorted(all_valid_fits),
-    "Sigma of Difference against Threshold (all lengths)",
+    r"$\sigma$ of threshold-time difference $t_{\mathrm{top}} - t_{\mathrm{bottom}}$ vs photon threshold N (all lengths)",
     "threshold_difference_gauss_sigma_all_lengths",
+    table_threshold=50,
 )
 
-# Auswahl an Längen
-selected_lengths = [14.0, 70.0, 140.0, 180.0]
-plot_lengths(
-    [length for length in selected_lengths if length in all_valid_fits],
-    "Sigma of Difference against Threshold (selected lengths)",
-    "threshold_difference_gauss_sigma_selected_lengths",
-)
+# # Auswahl an Längen
+# selected_lengths = [14.0, 70.0, 100.0]
+# plot_lengths(
+#     [length for length in selected_lengths if length in all_valid_fits],
+#     r"$\sigma$ of threshold-time difference $t_{\mathrm{top}} - t_{\mathrm{bottom}}$ vs photon threshold N (selected lengths)",
+#     "threshold_difference_gauss_sigma_selected_lengths",
+# )
+
+# Anteil der N = 50 Schwellen-Photonen an allen gemessenen Photonen (top + bottom) pro Event, L = 70 mm
+fraction_file = DATA_DIR / "70mm.csv"
+fraction_threshold = 50
+
+if fraction_file.exists():
+    hits = pd.read_csv(
+        fraction_file, comment="#", header=None,
+        usecols=[1, 3], names=["EventID", "Hit"],
+        dtype={"EventID": "int32", "Hit": "category"},
+    )
+    hits = hits[hits["Hit"].isin(["top", "bottom"])]
+
+    photons_per_event = hits.groupby("EventID").size()
+    fraction_percent = fraction_threshold / photons_per_event * 100
+
+    print(f"\nL = 70 mm: {len(photons_per_event)} Events")
+    print(f"Mean total photons per event (top + bottom): {photons_per_event.mean():.1f}")
+    print(
+        f"N = {fraction_threshold} photons are on average "
+        f"{fraction_percent.mean():.2f} % of the measured photons "
+        f"(std {fraction_percent.std(ddof=1):.2f} %)"
+    )
