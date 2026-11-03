@@ -38,11 +38,13 @@ plt.rcParams.update({
     "errorbar.capsize": 3,
 })
 
-def plot_title(what, length=None):
+def plot_title(what, length=None, n_events=None):
     # Erste Zeile: Inhalt, zweite Zeile: Setup
     setup = [f"Scintillator: {SCINTILLATOR_TYPE}", f"E = {ENERGY}"]
     if length is not None:
         setup.append(f"L = {length:g} mm")
+    if n_events is not None:
+        setup.append(f"{n_events} events")
     setup += [f"PDE: {PDE_APPLIED}", f"SiPM active area: {SIPM_ACTIVE_AREA}"]
     return f"{what}\n" + ", ".join(setup)
 
@@ -69,6 +71,7 @@ def save_plot(filename=None):
 files = ["4mm.csv", "70mm.csv", "100mm.csv"]
 
 all_valid_fits = {}
+events_per_length = {}
 
 # Je ein Bild für alle Längen, ein Teilplot pro Länge (nach Länge sortiert)
 files = sorted(files, key=lambda name: float(name.removesuffix("mm.csv")))
@@ -387,6 +390,7 @@ for file_index, file in enumerate(files):
         1, 2, figsize=(11, 5), gridspec_kw={"width_ratios": [3, 1.3]}
     )
     ax_table.axis("off")
+    ax_table.set_title("Gaussian fits for different threshold", loc="left", fontsize=10)
 
     ax_sigma.errorbar(
         valid_fits["Threshold"],
@@ -401,12 +405,17 @@ for file_index, file in enumerate(files):
         data["EventID"] == first_event_id, "ScintillatorLenght"
     ].iloc[0]
     all_valid_fits[float(scintillator_length)] = valid_fits
+    events_per_length[float(scintillator_length)] = counts_events
     ax_sigma.set_title(
-        plot_title(r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold", scintillator_length),
+        plot_title(
+            r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold",
+            scintillator_length,
+            counts_events,
+        ),
         loc="left",
         fontsize=10,
     )
-    ax_sigma.set_xlabel("threshold N / a.u.")
+    ax_sigma.set_xlabel("threshold N")
     ax_sigma.set_ylabel(r"$\sigma$ / ps")
 
     stats_text = " N    Mean / ns    Sigma / ps    Err / ps\n"
@@ -435,6 +444,56 @@ for file_index, file in enumerate(files):
     # plt.show()
 
     print(f"Finished plotting threshold difference Gaussian sigma: {scintillator_length} mm")
+
+    # Verteilung der Differenz bei fester Schwelle mit Gauss-Fit
+    hist_threshold = 50
+    hist_diff = threshold_times["Difference"][hist_threshold].dropna().to_numpy(dtype=float)
+
+    if len(hist_diff) > 1:
+        hist_mean, hist_sigma, hist_mean_err, hist_sigma_err = fit_gauss(hist_diff, return_errors=True)
+        hist_edges = np.histogram_bin_edges(hist_diff, bins="auto")
+        hist_bin_width = hist_edges[1] - hist_edges[0]
+
+        fig, ax_hist = plt.subplots(figsize=(8, 5.5))
+        ax_hist.hist(
+            hist_diff,
+            bins=hist_edges,
+            histtype="step",
+            linewidth=2,
+            color="steelblue",
+            label=f"data"
+        )
+
+        if np.isfinite(hist_mean):
+            fit_x = np.linspace(hist_edges[0], hist_edges[-1], 1000)
+            ax_hist.plot(
+                fit_x,
+                len(hist_diff) * hist_bin_width * gauss(fit_x, hist_mean, hist_sigma),
+                color="red",
+                linewidth=2,
+                label=(
+                    "Gaussian fit\n"
+                    rf"$\mu = {hist_mean * 1000:.1f} \pm {hist_mean_err * 1000:.1f}$ ps" "\n"
+                    rf"$\sigma = {hist_sigma * 1000:.1f} \pm {hist_sigma_err * 1000:.1f}$ ps"
+                ),
+            )
+
+        ax_hist.set_title(
+            plot_title(
+                rf"Distribution of $t_{{top}} - t_{{bottom}}$ at threshold N = {hist_threshold}",
+                scintillator_length,
+                len(hist_diff),
+            ),
+            loc="left",
+            fontsize=10,
+        )
+        ax_hist.set_xlabel(r"$t_{top} - t_{bottom}$ / ns")
+        ax_hist.set_ylabel("counts / bin")
+        ax_hist.legend()
+
+        fig.tight_layout()
+        save_plot(f"threshold_difference_distribution_N{hist_threshold}_{scintillator_length}mm")
+        plt.close(fig)
 
     # for column, x_label, _ in scatter_specs:
     #     ax = scatter_figures[column][1][file_index]
@@ -465,7 +524,7 @@ length_styles = {
     for i, length in enumerate(sorted(all_valid_fits))
 }
 
-def plot_lengths(lengths, title, filename):
+def plot_lengths(lengths, title, filename, n_events=None):
     fig, ax = plt.subplots(figsize=(9, 6))
 
     for length in lengths:
@@ -481,7 +540,7 @@ def plot_lengths(lengths, title, filename):
             label=f"{length:g} mm",
         )
 
-    ax.set_title(plot_title(title), loc="left", fontsize=10)
+    ax.set_title(plot_title(title, n_events=n_events), loc="left", fontsize=10)
     ax.set_xlabel("photon threshold N")
     ax.set_ylabel(r"$\sigma$ / ps")
     ax.legend(title="Length")
@@ -491,8 +550,10 @@ def plot_lengths(lengths, title, filename):
     # plt.show()
 
 # Alle Längen in einem Plot
+event_counts = set(events_per_length.values())
 plot_lengths(
     sorted(all_valid_fits),
     r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold N, L = (4, 70, 100) mm",
     "threshold_difference_gauss_sigma_all_lengths",
+    n_events=event_counts.pop() if len(event_counts) == 1 else None,
 )
