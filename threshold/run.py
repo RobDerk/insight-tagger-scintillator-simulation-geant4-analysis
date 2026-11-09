@@ -13,7 +13,7 @@ DATA_DIR = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/dat
 
 # Setup-Angaben für die Plot-Titel, bitte anpassen
 SCINTILLATOR_TYPE = "EJ-232"
-ENERGY = "1 GeV"
+ENERGY = "1 MeV"
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
 
@@ -554,6 +554,6 @@ event_counts = set(events_per_length.values())
 plot_lengths(
     sorted(all_valid_fits),
     r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold N, L = (4, 70, 100) mm",
-    r"threshold_{SCINTILLATOR_TYPE}_{ENERGY}_all_lengths",
+    f"threshold_{SCINTILLATOR_TYPE}_{ENERGY}_all_lengths",
     n_events=event_counts.pop() if len(event_counts) == 1 else None,
 )
