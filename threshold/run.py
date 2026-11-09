@@ -9,13 +9,19 @@ from scipy.stats import norm
 from scipy.stats import moyal
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DATA_DIR = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
+DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
-# Setup-Angaben für die Plot-Titel, bitte anpassen
-SCINTILLATOR_TYPE = "EJ-232"
-ENERGY = "1 MeV"
+# Daten liegen unter data/<Material>/<Energie>/<L\u00e4nge>mm.csv
+MATERIAL_FOLDER = "EJ230"
+ENERGY_FOLDER = "2MeV"
+DATA_DIR = DATA_ROOT / MATERIAL_FOLDER / ENERGY_FOLDER
+
+# Setup-Angaben für die Plot-Titel, bitte anpassen (Material und Energie kommen aus der CSV)
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
+
+def format_energy(energy_mev):
+    return f"{energy_mev / 1000:g} GeV" if energy_mev >= 1000 else f"{energy_mev:g} MeV"
 
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -48,8 +54,8 @@ def plot_title(what, length=None, n_events=None):
     setup += [f"PDE: {PDE_APPLIED}", f"SiPM active area: {SIPM_ACTIVE_AREA}"]
     return f"{what}\n" + ", ".join(setup)
 
-PLOTS_DIR = SCRIPT_DIR / "plots"
-PLOTS_DIR.mkdir(exist_ok=True)
+PLOTS_DIR = SCRIPT_DIR / "plots" / MATERIAL_FOLDER / ENERGY_FOLDER
+PLOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def save_plot(filename=None):
     figure = plt.gcf()
@@ -118,7 +124,9 @@ for file_index, file in enumerate(files):
         "Process",
         "NSideReflections",
         "ScintillatorLenght",
-        "EmissionAngle"
+        "EmissionAngle",
+        "Material",
+        "ElectronEnergy"
     ]
 
     DTYPES = {
@@ -136,6 +144,8 @@ for file_index, file in enumerate(files):
         "NSideReflections": "int32",
         "ScintillatorLenght": "float32",
         "EmissionAngle": "float32",
+        "Material": "category",
+        "ElectronEnergy": "float32",
     }
 
     data = pd.read_csv(CSV_PATH, comment="#", header=None, names=COLUMN_NAMES, dtype=DTYPES)
@@ -145,6 +155,9 @@ for file_index, file in enumerate(files):
 
     print(f"{counts_data:,} Photon-Treffer geladen, {counts_events:,} Events")
     data.head()
+
+    SCINTILLATOR_TYPE = str(data["Material"].iloc[0])
+    ENERGY = format_energy(float(data["ElectronEnergy"].iloc[0]))
 
     data["WavelengthNM"] = (1239.841984 / data["PhotonEnergy"])
 
