@@ -440,7 +440,7 @@ for file_index, file in enumerate(files):
     )
 
     fig.tight_layout()
-    save_plot(f"threshold_difference_gauss_sigma_{scintillator_length}mm")
+    save_plot(f"threshold_{SCINTILLATOR_TYPE}_{ENERGY}_{scintillator_length}mm")
     # plt.show()
 
     print(f"Finished plotting threshold difference Gaussian sigma: {scintillator_length} mm")
@@ -492,7 +492,7 @@ for file_index, file in enumerate(files):
         ax_hist.legend()
 
         fig.tight_layout()
-        save_plot(f"threshold_difference_distribution_N{hist_threshold}_{scintillator_length}mm")
+        save_plot(f"threshold_distribution_{SCINTILLATOR_TYPE}_{ENERGY}_N{hist_threshold}_{scintillator_length}mm")
         plt.close(fig)
 
     # for column, x_label, _ in scatter_specs:
@@ -554,6 +554,6 @@ event_counts = set(events_per_length.values())
 plot_lengths(
     sorted(all_valid_fits),
     r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold N, L = (4, 70, 100) mm",
-    "threshold_difference_gauss_sigma_all_lengths",
+    r"threshold_{SCINTILLATOR_TYPE}_{ENERGY}_all_lengths",
     n_events=event_counts.pop() if len(event_counts) == 1 else None,
 )
