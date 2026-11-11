@@ -13,7 +13,7 @@ DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/da
 
 # Daten liegen unter data/<Material>/<Energie>/<L\u00e4nge>mm.csv
 MATERIAL_FOLDER = "EJ230"
-ENERGY_FOLDER = "2MeV"
+ENERGY_FOLDER = "1GeV"
 DATA_DIR = DATA_ROOT / MATERIAL_FOLDER / ENERGY_FOLDER
 
 # Setup-Angaben für die Plot-Titel, bitte anpassen (Material und Energie kommen aus der CSV)

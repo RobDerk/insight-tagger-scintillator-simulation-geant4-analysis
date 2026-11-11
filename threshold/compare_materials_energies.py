@@ -10,7 +10,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
 # Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
-OUT_DIR = SCRIPT_DIR / "plots_comparison"
+OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison"
 
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
