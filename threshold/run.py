@@ -1,4 +1,6 @@
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -8,17 +10,39 @@ from scipy.optimize import curve_fit
 from scipy.stats import norm
 from scipy.stats import moyal
 
+from materials import material_label
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
-# Daten liegen unter data/<Material>/<Energie>/<L\u00e4nge>mm.csv
-MATERIAL_FOLDER = "EJ230"
-ENERGY_FOLDER = "1GeV"
+# Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
+MATERIAL_FOLDERS = ["EJ230", "EJ232", "EJ232Q05", "EJ228"]
+ENERGY_FOLDERS = ["1MeV", "2MeV", "1GeV"]
+
+if len(sys.argv) == 3:
+    MATERIAL_FOLDER, ENERGY_FOLDER = sys.argv[1:3]
+else:
+    # Ohne Argumente läuft jede Kombination als eigener Prozess, python3 run.py <Material> <Energie> nur eine
+    for material in MATERIAL_FOLDERS:
+        for energy in ENERGY_FOLDERS:
+            if not (DATA_ROOT / material / energy).is_dir():
+                print(f"Skipping {material}/{energy}: folder not found")
+                continue
+
+            print(f"=== {material} / {energy} ===")
+            result = subprocess.run([sys.executable, __file__, material, energy])
+            if result.returncode != 0:
+                print(f"Analysis failed for {material}/{energy} (exit code {result.returncode})")
+    sys.exit()
+
 DATA_DIR = DATA_ROOT / MATERIAL_FOLDER / ENERGY_FOLDER
 
 # Setup-Angaben für die Plot-Titel, bitte anpassen (Material und Energie kommen aus der CSV)
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
+
+# Bereich der x-Achse (photon threshold N) in den Sigma-Plots
+THRESHOLD_PLOT_RANGE = (0, 125)
 
 def format_energy(energy_mev):
     return f"{energy_mev / 1000:g} GeV" if energy_mev >= 1000 else f"{energy_mev:g} MeV"
@@ -46,7 +70,7 @@ plt.rcParams.update({
 
 def plot_title(what, length=None, n_events=None):
     # Erste Zeile: Inhalt, zweite Zeile: Setup
-    setup = [f"Scintillator: {SCINTILLATOR_TYPE}", f"E = {ENERGY}"]
+    setup = [f"Scintillator: {material_label(MATERIAL_FOLDER)}", f"E = {ENERGY_FOLDER}"]
     if length is not None:
         setup.append(f"L = {length:g} mm")
     if n_events is not None:
@@ -86,6 +110,9 @@ missing_files = [name for name in files if not (DATA_DIR / name).exists()]
 if missing_files:
     print(f"Skipping missing files in {DATA_DIR}: {', '.join(missing_files)}")
 files = [name for name in files if name not in missing_files]
+
+if not files:
+    sys.exit(f"No CSV files found in {DATA_DIR}")
 
 # scatter_specs = [
 #     ("TrackLenght", "track length / mm", "tracklength"),
@@ -429,6 +456,7 @@ for file_index, file in enumerate(files):
         fontsize=10,
     )
     ax_sigma.set_xlabel("threshold N")
+    ax_sigma.set_xlim(*THRESHOLD_PLOT_RANGE)
     ax_sigma.set_ylabel(r"$\sigma$ / ps")
 
     stats_text = " N    Mean / ns    Sigma / ps    Err / ps\n"
@@ -555,6 +583,7 @@ def plot_lengths(lengths, title, filename, n_events=None):
 
     ax.set_title(plot_title(title, n_events=n_events), loc="left", fontsize=10)
     ax.set_xlabel("photon threshold N")
+    ax.set_xlim(*THRESHOLD_PLOT_RANGE)
     ax.set_ylabel(r"$\sigma$ / ps")
     ax.legend(title="Length")
 

@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.optimize import curve_fit
 
+from materials import material_label
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
@@ -16,6 +18,9 @@ SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
 
 CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 141, 10))
+
+# Bereich der x-Achse (photon threshold N) in den Plots
+THRESHOLD_PLOT_RANGE = (0, 125)
 
 COLUMN_NAMES = [
     "RunID",
@@ -138,7 +143,7 @@ def plot_title(what, length, energy_mev=None, material=None):
     # Erste Zeile: Inhalt, zweite Zeile: Setup
     setup = [f"L = {length:g} mm"]
     if material is not None:
-        setup.append(f"Scintillator: {material}")
+        setup.append(f"Scintillator: {material_label(material)}")
     if energy_mev is not None:
         setup.append(f"E = {format_energy(energy_mev)}")
     setup += [f"PDE: {PDE_APPLIED}", f"SiPM active area: {SIPM_ACTIVE_AREA}"]
@@ -163,6 +168,7 @@ def plot_curves(curves, title, path):
 
     ax.set_title(title, loc="left", fontsize=10)
     ax.set_xlabel("photon threshold N")
+    ax.set_xlim(*THRESHOLD_PLOT_RANGE)
     ax.set_ylabel(r"$\sigma$ / ps")
     ax.legend()
 
@@ -200,7 +206,7 @@ for length in lengths:
     for energy in energies:
         curves = [
             (
-                f"{material} ({results[(length, material, energy)]['n_events']} events)",
+                f"{material_label(material)}, {results[(length, material, energy)]['n_events']} events",
                 results[(length, material, energy)]["fits"],
                 material_colors[material],
                 markers[i % len(markers)],
