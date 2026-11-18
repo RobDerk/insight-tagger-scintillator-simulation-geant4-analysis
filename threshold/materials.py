@@ -1,7 +1,6 @@
 # Materialkonstanten, Quelle: Eljen-Datenblätter
 # EJ-232/EJ-232Q: https://eljentechnology.com/products/plastic-scintillators/ej-232-ej-232q
 # EJ-228/EJ-230:  https://eljentechnology.com/products/plastic-scintillators/ej-228-ej-230
-# Der Schlüssel ist der Materialname aus der CSV-Spalte "Material". Neue Konstanten oder Materialien hier ergänzen.
 MATERIALS = {
     "EJ228": {
         "rise_time_ps": 500,
@@ -9,7 +8,7 @@ MATERIALS = {
         "light_output_pct_anthracene": 67,
         "photons_per_mev": 10200,
         "emission_max_nm": 391,
-        "attenuation_length_cm": None,
+        "attenuation_length_cm": 10, # assumption smaller than EJ-230
         "refractive_index": 1.58,
     },
     "EJ230": {
@@ -27,7 +26,7 @@ MATERIALS = {
         "light_output_pct_anthracene": 55,
         "photons_per_mev": 8400,
         "emission_max_nm": 370,
-        "attenuation_length_cm": None,
+        "attenuation_length_cm": 10,
         "refractive_index": 1.58,
     },
     # EJ-232Q mit 0.5 % Benzophenon
@@ -37,14 +36,14 @@ MATERIALS = {
         "light_output_pct_anthracene": 19,
         "photons_per_mev": 2900,
         "emission_max_nm": 370,
-        "attenuation_length_cm": None,
+        "attenuation_length_cm": 10,
         "refractive_index": 1.58,
     },
 }
 
 
 def material_label(name):
-    # Materialname mit Anstiegs- und Abklingzeit, für Titel und Legenden
+    # Materialname mit Rise und Decay Zeit, für Titel und Legenden
     properties = MATERIALS.get(name)
     if properties is None:
         return name
