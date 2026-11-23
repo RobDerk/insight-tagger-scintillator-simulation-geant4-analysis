@@ -17,7 +17,7 @@ OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison_brightness"
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
 
-CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 201, 10))
+CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 301, 10))
 
 PLOT_RANGE = {
     "energies": {
@@ -197,7 +197,7 @@ def plot_title(what, length, energy_mev=None, material=None):
 
     return f"{what}\n" + " | ".join(setup)
 
-def plot_curves(curves, title, path, plot_type, plot_key):
+def plot_curves(curves, title, path, plot_type, plot_key, plot_label):
     # curves: Liste aus (Label, fits, Farbe, Marker)
     fig, ax = plt.subplots(figsize=(9, 6))
 
@@ -250,7 +250,7 @@ def plot_curves(curves, title, path, plot_type, plot_key):
     fig.savefig(path, dpi=300, bbox_inches="tight")
     
     plt.close(fig)
-    print(f"Saved {path}")
+    print(f"Saved plot for {plot_label}") # : {path}
 
 results = {}
 
@@ -258,9 +258,14 @@ only_data = DATA_ROOT.glob("*/*/70mm.csv")
 
 for path in sorted(only_data):
     length = float(path.name.removesuffix("mm.csv"))
-    print(f"Loading CSV file: {path}")
+    # print(f"Loading CSV file: {path}")
     result = analyse_file(path)
     results[(length, result["material"], result["energy_mev"])] = result
+    print(f"Material: {result['material']}")
+    print(f"Length: {length} mm")
+    print(f"Energy: {result['energy_mev']} MeV")
+    print(f"Average detected photons over all events: {result['average_detected_photons_over_all_events']}")
+    print("---------------------------------")
 
 if not results:
     raise SystemExit(f"No CSV files found under {DATA_ROOT}")
@@ -304,7 +309,8 @@ for length in lengths:
             ),
             length_dir / f"materials_{format_energy(energy).replace(' ', '')}.png",
             plot_type="materials",
-            plot_key=format_energy(energy).replace(" ", "")
+            plot_key=format_energy(energy).replace(" ", ""),
+            plot_label=f"all materials - {length:g} mm - {format_energy(energy)}",
         )
 
     # Länge und Material fest, Energie variiert
@@ -331,5 +337,6 @@ for length in lengths:
             ),
             length_dir / f"energies_{material}.png",
             plot_type="energies",
-            plot_key=material
+            plot_key=material,
+            plot_label=f"{material} - {length:g} mm - all energies",
         )
