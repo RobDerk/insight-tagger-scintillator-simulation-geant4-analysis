@@ -254,9 +254,9 @@ def plot_curves(curves, title, path, plot_type, plot_key, plot_label):
 
 results = {}
 
-only_data = DATA_ROOT.glob("*/*/70mm.csv")
+files_data = DATA_ROOT.glob("*/*/*mm.csv")
 
-for path in sorted(only_data):
+for path in sorted(files_data):
     length = float(path.name.removesuffix("mm.csv"))
     # print(f"Loading CSV file: {path}")
     result = analyse_file(path)
