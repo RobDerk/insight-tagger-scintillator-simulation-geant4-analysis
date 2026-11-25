@@ -1,3 +1,4 @@
 *.csv
 Scint.code-workspace
 .analysis/
+__pycache__/
