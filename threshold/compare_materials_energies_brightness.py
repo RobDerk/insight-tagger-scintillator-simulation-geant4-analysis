@@ -12,6 +12,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/data")
 
 # Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
+# Nur die hier aufgeführten Materialordner werden analysiert.
+MATERIAL_FOLDERS = ["BC422", "EJ228", "EJ230", "EJ232", "EJ232Q05"]
 OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison_brightness"
 
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
@@ -254,7 +256,13 @@ def plot_curves(curves, title, path, plot_type, plot_key, plot_label):
 
 results = {}
 
-files_data = DATA_ROOT.glob("*/*/*mm.csv")
+files_data = []
+for material_folder in sorted(set(MATERIAL_FOLDERS)):
+    material_dir = DATA_ROOT / material_folder
+    material_files = list(material_dir.glob("*/*mm.csv"))
+    if not material_files:
+        raise SystemExit(f"No CSV files found for material folder {material_dir}")
+    files_data.extend(material_files)
 
 for path in sorted(files_data):
     length = float(path.name.removesuffix("mm.csv"))
@@ -268,7 +276,7 @@ for path in sorted(files_data):
     print("---------------------------------")
 
 if not results:
-    raise SystemExit(f"No CSV files found under {DATA_ROOT}")
+    raise SystemExit("No materials selected in MATERIAL_FOLDERS")
 
 lengths = sorted({key[0] for key in results})
 materials = sorted({key[1] for key in results})

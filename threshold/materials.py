@@ -8,7 +8,7 @@ MATERIALS = {
         "light_output_pct_anthracene": 67,
         "photons_per_mev": 10200,
         "emission_max_nm": 391,
-        "attenuation_length_cm": 10, # assumption smaller than EJ-230
+        "attenuation_length_cm": 20,
         "refractive_index": 1.58,
     },
     "EJ230": {
@@ -39,6 +39,15 @@ MATERIALS = {
         "attenuation_length_cm": 10,
         "refractive_index": 1.58,
     },
+    "BC422": {
+        "rise_time_ps": 500,
+        "decay_time_ps": 1400,
+        "light_output_pct_anthracene": 64,
+        "photons_per_mev": 9700,
+        "emission_max_nm": 391,
+        "attenuation_length_cm": 120,
+        "refractive_index": 1.58,
+    }
 }
 
 
