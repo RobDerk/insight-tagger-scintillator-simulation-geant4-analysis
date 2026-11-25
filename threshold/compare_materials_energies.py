@@ -13,7 +13,7 @@ DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/da
 # Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
 OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison"
 
-MATERIAL_FOLDERS = ["BC422", "EJ228", "EJ230", "EJ232", "EJ232Q05"]
+MATERIAL_FOLDERS = ["EJ228", "EJ230", "EJ232", "EJ232Q05"] # BC422
 
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
@@ -179,6 +179,11 @@ def plot_title(what, length, relative, energy_mev=None, material=None):
     return f"{what}\n" + ", ".join(setup)
 
 
+def event_statistics_label(result):
+    average = result["average_detected_photons_over_all_events"]
+    return f"{result['n_events']:,} events | " + rf"$\langle N_\gamma\rangle$={average:,.1f}"
+
+
 def plot_curves(curves, title, path, relative, plot_type, plot_key):
     # curves: Liste aus (Label, fits, Farbe, Marker)
     fig, ax = plt.subplots(figsize=(9, 6))
@@ -207,22 +212,36 @@ def plot_curves(curves, title, path, relative, plot_type, plot_key):
         else:
             ax.set_xlim(left=0)
             ax.set_ylim(bottom=0)
-        ax.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.18),
-            ncol=2,
-            fontsize=10,
-            frameon=False,
-            columnspacing=2,
-            labelspacing=1.2,
-        )
     else:
         ax.set_xlabel("photon threshold N")
         ax.set_xlim(*THRESHOLD_PLOT_RANGE)
-        ax.legend()
     ax.set_ylabel(r"$\sigma$ / ps")
 
-    fig.tight_layout()
+    handles, labels = ax.get_legend_handles_labels()
+    for n_columns in range(len(labels), 0, -1):
+        # Matplotlib füllt spaltenweise; die sichtbare Reihenfolge soll zeilenweise sein.
+        order = [i for column in range(n_columns) for i in range(column, len(labels), n_columns)]
+        legend = fig.legend(
+            [handles[i] for i in order],
+            [labels[i] for i in order],
+            loc="lower center",
+            bbox_to_anchor=(0.5, 0.01),
+            ncol=n_columns,
+            fontsize=8,
+            frameon=False,
+            columnspacing=0.8,
+            labelspacing=0.3,
+            handlelength=1.2,
+            handletextpad=0.4,
+            borderaxespad=0,
+        )
+        fig.canvas.draw()
+        legend_bounds = legend.get_window_extent(fig.canvas.get_renderer())
+        if legend_bounds.width <= 0.96 * fig.bbox.width or n_columns == 1:
+            break
+        legend.remove()
+
+    fig.tight_layout(rect=(0, legend_bounds.height / fig.bbox.height + 0.01, 1, 1))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -232,7 +251,11 @@ def plot_curves(curves, title, path, relative, plot_type, plot_key):
 def plot_comparisons(results, relative):
     suffix = "rel" if relative else "abs"
     lengths = sorted({key[0] for key in results})
-    materials = sorted({key[1] for key in results})
+    material_order = {name: i for i, name in enumerate(MATERIAL_FOLDERS)}
+    materials = sorted(
+        {key[1] for key in results},
+        key=lambda name: (material_order.get(name, len(material_order)), name),
+    )
     energies = sorted({key[2] for key in results})
 
     # Feste Farbe pro Material bzw. Energie und fester Marker pro Position
@@ -250,8 +273,7 @@ def plot_comparisons(results, relative):
                 if (length, material, energy) not in results:
                     continue
                 result = results[(length, material, energy)]
-                separator = "\n" if relative else ", "
-                label = f"{material_label(material)}{separator}{result['n_events']} events"
+                label = f"{material_label(material, multiline=True)}\n{event_statistics_label(result)}"
                 curves.append((label, result["fits"], material_colors[material], markers[i % len(markers)]))
 
             if len(curves) < 2:
@@ -276,7 +298,7 @@ def plot_comparisons(results, relative):
         for material in materials:
             curves = [
                 (
-                    f"{format_energy(energy)} ({results[(length, material, energy)]['n_events']} events)",
+                    f"{format_energy(energy)}\n{event_statistics_label(results[(length, material, energy)])}",
                     results[(length, material, energy)]["fits"],
                     energy_colors[energy],
                     markers[i % len(markers)],
@@ -316,11 +338,14 @@ def main():
     results = {}
     for path in sorted(files):
         length = float(path.name.removesuffix("mm.csv"))
-        print(f"Loading CSV file: {path}")
         result = analyse_file(path)
         key = (length, result["material"], result["energy_mev"])
         results[key] = result
+        print(f"Material: {result['material']}")
+        print(f"Length: {length} mm")
+        print(f"Energy: {result['energy_mev']} MeV")
         print(f"Average detected photons over all events: {result['average_detected_photons_over_all_events']}")
+        print("---------------------------------")
 
     plot_comparisons(results, relative=False)
     plot_comparisons(results, relative=True)

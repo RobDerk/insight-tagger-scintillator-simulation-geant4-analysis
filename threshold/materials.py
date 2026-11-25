@@ -52,12 +52,17 @@ MATERIALS = {
 }
 
 
-def material_label(name):
+def material_label(name, multiline=False):
     # Materialname mit Rise und Decay Zeit, für Titel und Legenden
     properties = MATERIALS.get(name)
     if properties is None:
         return name
+    if multiline:
+        return (
+            f"{name}\n"
+            rf"$(\tau_r,\tau_d)$ = ({properties['rise_time_ps']:g}, {properties['decay_time_ps']:g}) ps"
+        )
     return (
-        rf"{name} ($\tau_{{rise}}$ = {properties['rise_time_ps']:g} ps, "
-        rf"$\tau_{{decay}}$ = {properties['decay_time_ps']:g} ps)"
+        rf"{name} ($\tau_r$ = {properties['rise_time_ps']:g} ps, "
+        rf"$\tau_d$ = {properties['decay_time_ps']:g} ps)"
     )
