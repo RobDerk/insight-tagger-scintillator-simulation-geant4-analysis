@@ -1,6 +1,7 @@
 # Materialkonstanten, Quelle: Eljen-Datenblätter
 # EJ-232/EJ-232Q: https://eljentechnology.com/products/plastic-scintillators/ej-232-ej-232q
 # EJ-228/EJ-230:  https://eljentechnology.com/products/plastic-scintillators/ej-228-ej-230
+# BC-422: https://luxiumsolutions.com/radiation-detection-scintillators/plastic-scintillators/fast-timing-bc-418-bc-420-bc-422-bc-422q
 MATERIALS = {
     "EJ228": {
         "rise_time_ps": 500,
@@ -39,13 +40,13 @@ MATERIALS = {
         "attenuation_length_cm": 10,
         "refractive_index": 1.58,
     },
+    # Bulk light attenuation length; the typical 1/e length is not applicable.
     "BC422": {
-        "rise_time_ps": 500,
-        "decay_time_ps": 1400,
-        "light_output_pct_anthracene": 64,
-        "photons_per_mev": 9700,
-        "emission_max_nm": 391,
-        "attenuation_length_cm": 120,
+        "rise_time_ps": 350,
+        "decay_time_ps": 1600,
+        "light_output_pct_anthracene": 55,
+        "emission_max_nm": 370,
+        "attenuation_length_cm": 8,
         "refractive_index": 1.58,
     }
 }

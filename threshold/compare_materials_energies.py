@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import numpy as np
@@ -14,13 +13,31 @@ DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/da
 # Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
 OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison"
 
+MATERIAL_FOLDERS = ["BC422", "EJ228", "EJ230", "EJ232", "EJ232Q05"]
+
 SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
 PDE_APPLIED = True
 
-CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 141, 10))
+ABSOLUTE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 141, 10))
+CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 301, 10))
 
 # Bereich der x-Achse (photon threshold N) in den Plots
 THRESHOLD_PLOT_RANGE = (0, 125)
+
+# Bereich der x- und y-Achse (relative brightness / %) in den Plots
+RELATIVE_PLOT_RANGE = {
+    "energies": {
+        "EJ228": {"x": (0, 30), "y": (30, 270)},
+        "EJ230": {"x": (0, 11), "y": (25, 75)},
+        "EJ232": {"x": (0, 25), "y": (20, 210)},
+        "EJ232Q05": {"x": (0, 30), "y": (20, 200)},
+    },
+    "materials": {
+        "1GeV": {"x": (0, 26), "y": (20, 200)},
+        "1MeV": {"x": (0, 30), "y": (20, 250)},
+        "2MeV": {"x": (0, 30), "y": (20, 250)},
+    },
+}
 
 COLUMN_NAMES = [
     "RunID",
@@ -117,6 +134,12 @@ def analyse_file(path):
     top = threshold_times(scintillation[scintillation["Hit"] == "top"])
     bottom = threshold_times(scintillation[scintillation["Hit"] == "bottom"])
 
+    detected = scintillation[scintillation["Hit"].isin(["top", "bottom"])]
+    photons_per_event = detected.groupby("EventID").size()
+    total_detected = photons_per_event.sum()
+    # Mittel über Events mit mindestens einem Treffer, jeweils beide Seiten zusammen.
+    average_detected = photons_per_event.mean()
+
     # Events ohne Treffer auf einer Seite ergeben NaN
     difference = top - bottom
 
@@ -129,6 +152,8 @@ def analyse_file(path):
             "Events": len(diff),
             "Sigma_ps": sigma * 1000,
             "SigmaErr_ps": sigma_err * 1000,
+            "RelativeBrightnessToMax": threshold / total_detected * 100 if total_detected > 0 else np.nan,
+            "RelativeBrightnessToAverage": threshold / average_detected * 100 if average_detected > 0 else np.nan,
         })
 
     return {
@@ -136,28 +161,34 @@ def analyse_file(path):
         "energy_mev": float(data["ElectronEnergy"].iloc[0]),
         "n_events": int(data["EventID"].nunique()),
         "fits": pd.DataFrame(rows),
+        "average_detected_photons_over_all_events": average_detected,
     }
 
 
-def plot_title(what, length, energy_mev=None, material=None):
-    # Erste Zeile: Inhalt, zweite Zeile: Setup
+def plot_title(what, length, relative, energy_mev=None, material=None):
     setup = [f"L = {length:g} mm"]
     if material is not None:
-        setup.append(f"Scintillator: {material_label(material)}")
+        label = material_label(material)
+        setup.append(label if relative else f"Scintillator: {label}")
     if energy_mev is not None:
         setup.append(f"E = {format_energy(energy_mev)}")
+    if relative:
+        setup += [f"PDE: {'applied' if PDE_APPLIED else 'not applied'}", f"SiPM: {SIPM_ACTIVE_AREA}"]
+        return f"{what}\n" + " | ".join(setup)
     setup += [f"PDE: {PDE_APPLIED}", f"SiPM active area: {SIPM_ACTIVE_AREA}"]
     return f"{what}\n" + ", ".join(setup)
 
 
-def plot_curves(curves, title, path):
+def plot_curves(curves, title, path, relative, plot_type, plot_key):
     # curves: Liste aus (Label, fits, Farbe, Marker)
     fig, ax = plt.subplots(figsize=(9, 6))
 
     for label, fits, color, marker in curves:
+        if not relative:
+            fits = fits[fits["Threshold"].isin(ABSOLUTE_PHOTON_THRESHOLDS)]
         valid = fits.dropna(subset=["Sigma_ps"])
         ax.errorbar(
-            valid["Threshold"],
+            valid["RelativeBrightnessToAverage" if relative else "Threshold"],
             valid["Sigma_ps"],
             yerr=valid["SigmaErr_ps"],
             fmt=marker,
@@ -167,10 +198,29 @@ def plot_curves(curves, title, path):
         )
 
     ax.set_title(title, loc="left", fontsize=10)
-    ax.set_xlabel("photon threshold N")
-    ax.set_xlim(*THRESHOLD_PLOT_RANGE)
+    if relative:
+        ax.set_xlabel("threshold brightness / %")
+        ranges = RELATIVE_PLOT_RANGE.get(plot_type, {}).get(plot_key)
+        if ranges is not None:
+            ax.set_xlim(*ranges["x"])
+            ax.set_ylim(*ranges["y"])
+        else:
+            ax.set_xlim(left=0)
+            ax.set_ylim(bottom=0)
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            ncol=2,
+            fontsize=10,
+            frameon=False,
+            columnspacing=2,
+            labelspacing=1.2,
+        )
+    else:
+        ax.set_xlabel("photon threshold N")
+        ax.set_xlim(*THRESHOLD_PLOT_RANGE)
+        ax.legend()
     ax.set_ylabel(r"$\sigma$ / ps")
-    ax.legend()
 
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -179,75 +229,102 @@ def plot_curves(curves, title, path):
     print(f"Saved {path}")
 
 
-results = {}
+def plot_comparisons(results, relative):
+    suffix = "rel" if relative else "abs"
+    lengths = sorted({key[0] for key in results})
+    materials = sorted({key[1] for key in results})
+    energies = sorted({key[2] for key in results})
 
-for path in sorted(DATA_ROOT.glob("*/*/*mm.csv")):
-    length = float(path.name.removesuffix("mm.csv"))
-    print(f"Loading CSV file: {path}")
-    result = analyse_file(path)
-    results[(length, result["material"], result["energy_mev"])] = result
+    # Feste Farbe pro Material bzw. Energie und fester Marker pro Position
+    material_colors = {name: plt.cm.tab10(i) for i, name in enumerate(materials)}
+    energy_colors = {energy: plt.cm.tab10(i) for i, energy in enumerate(energies)}
+    markers = "osv^Dp"
 
-if not results:
-    raise SystemExit(f"No CSV files found under {DATA_ROOT}")
+    for length in lengths:
+        length_dir = OUT_DIR / f"{length:g}mm"
 
-lengths = sorted({key[0] for key in results})
-materials = sorted({key[1] for key in results})
-energies = sorted({key[2] for key in results})
+        # Länge und Energie fest, Material variiert
+        for energy in energies:
+            curves = []
+            for i, material in enumerate(materials):
+                if (length, material, energy) not in results:
+                    continue
+                result = results[(length, material, energy)]
+                separator = "\n" if relative else ", "
+                label = f"{material_label(material)}{separator}{result['n_events']} events"
+                curves.append((label, result["fits"], material_colors[material], markers[i % len(markers)]))
 
-# Feste Farbe pro Material bzw. Energie und fester Marker pro Position
-material_colors = {name: plt.cm.tab10(i) for i, name in enumerate(materials)}
-energy_colors = {energy: plt.cm.tab10(i) for i, energy in enumerate(energies)}
-markers = "osv^Dp"
+            if len(curves) < 2:
+                continue
 
-for length in lengths:
-    length_dir = OUT_DIR / f"{length:g}mm"
-
-    # Länge und Energie fest, Material variiert
-    for energy in energies:
-        curves = [
-            (
-                f"{material_label(material)}, {results[(length, material, energy)]['n_events']} events",
-                results[(length, material, energy)]["fits"],
-                material_colors[material],
-                markers[i % len(markers)],
+            what = (
+                r"Time resolution $\sigma(t_{\mathrm{top}}-t_{\mathrm{bottom}})$ vs relative brightness of threshold (diff. materials)"
+                if relative else
+                r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold, different materials"
             )
-            for i, material in enumerate(materials)
-            if (length, material, energy) in results
-        ]
-        if len(curves) < 2:
-            continue
-
-        plot_curves(
-            curves,
-            plot_title(
-                r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold, different materials",
-                length,
-                energy_mev=energy,
-            ),
-            length_dir / f"materials_{format_energy(energy).replace(' ', '')}.png",
-        )
-
-    # Länge und Material fest, Energie variiert
-    for material in materials:
-        curves = [
-            (
-                f"{format_energy(energy)} ({results[(length, material, energy)]['n_events']} events)",
-                results[(length, material, energy)]["fits"],
-                energy_colors[energy],
-                markers[i % len(markers)],
+            energy_key = format_energy(energy).replace(" ", "")
+            plot_curves(
+                curves,
+                plot_title(what, length, relative, energy_mev=energy),
+                length_dir / f"materials_{energy_key}_{suffix}.png",
+                relative,
+                "materials",
+                energy_key,
             )
-            for i, energy in enumerate(energies)
-            if (length, material, energy) in results
-        ]
-        if len(curves) < 2:
-            continue
 
-        plot_curves(
-            curves,
-            plot_title(
-                r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold, different energies",
-                length,
-                material=material,
-            ),
-            length_dir / f"energies_{material}.png",
-        )
+        # Länge und Material fest, Energie variiert
+        for material in materials:
+            curves = [
+                (
+                    f"{format_energy(energy)} ({results[(length, material, energy)]['n_events']} events)",
+                    results[(length, material, energy)]["fits"],
+                    energy_colors[energy],
+                    markers[i % len(markers)],
+                )
+                for i, energy in enumerate(energies)
+                if (length, material, energy) in results
+            ]
+            if len(curves) < 2:
+                continue
+
+            what = (
+                r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs relative brightness of threshold (diff. energies)"
+                if relative else
+                r"Time resolution $\sigma(t_{top} - t_{bottom})$ vs photon threshold, different energies"
+            )
+            plot_curves(
+                curves,
+                plot_title(what, length, relative, material=material),
+                length_dir / f"energies_{material}_{suffix}.png",
+                relative,
+                "energies",
+                material,
+            )
+
+
+def main():
+    if not MATERIAL_FOLDERS:
+        raise SystemExit("No materials selected in MATERIAL_FOLDERS")
+    files = []
+    for material_folder in sorted(set(MATERIAL_FOLDERS)):
+        material_dir = DATA_ROOT / material_folder
+        material_files = list(material_dir.glob("*/*mm.csv"))
+        if not material_files:
+            raise SystemExit(f"No CSV files found for material folder {material_dir}")
+        files.extend(material_files)
+
+    results = {}
+    for path in sorted(files):
+        length = float(path.name.removesuffix("mm.csv"))
+        print(f"Loading CSV file: {path}")
+        result = analyse_file(path)
+        key = (length, result["material"], result["energy_mev"])
+        results[key] = result
+        print(f"Average detected photons over all events: {result['average_detected_photons_over_all_events']}")
+
+    plot_comparisons(results, relative=False)
+    plot_comparisons(results, relative=True)
+
+
+if __name__ == "__main__":
+    main()
