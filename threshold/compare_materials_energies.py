@@ -15,7 +15,7 @@ OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison"
 
 MATERIAL_FOLDERS = ["EJ228", "EJ230", "EJ232", "EJ232Q05"] # BC422
 
-SIPM_ACTIVE_AREA = "3.72 x 3.62 mm"
+SIPM_ACTIVE_AREA = "3 x (3.72 x 3.62 mm)"
 PDE_APPLIED = True
 
 ABSOLUTE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 141, 10))
