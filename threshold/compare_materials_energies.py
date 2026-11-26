@@ -22,7 +22,7 @@ ABSOLUTE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 141, 10))
 CUMULATIVE_PHOTON_THRESHOLDS = [1, 5] + list(range(10, 301, 10))
 
 # Bereich der x-Achse (photon threshold N) in den Plots
-THRESHOLD_PLOT_RANGE = (0, 125)
+THRESHOLD_PLOT_RANGE = (0, 150)
 
 # Bereich der x- und y-Achse (relative brightness / %) in den Plots
 RELATIVE_PLOT_RANGE = {
