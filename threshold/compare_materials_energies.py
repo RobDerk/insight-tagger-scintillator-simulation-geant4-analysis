@@ -13,7 +13,7 @@ DATA_ROOT = Path("/home/derksen/Desktop/geant4/Scintillation_Simulation_build/da
 # Daten liegen unter data/<Material>/<Energie>/<Länge>mm.csv
 OUT_DIR = SCRIPT_DIR / "plots" / "plots_comparison"
 
-MATERIAL_FOLDERS = ["EJ228", "EJ230", "EJ232", "EJ232Q05"] # BC422
+MATERIAL_FOLDERS = ["EJ228", "EJ230", "EJ232", "EJ232Q05", "BC422"] # BC422
 
 SIPM_ACTIVE_AREA = "3 x (3.72 x 3.62 mm)"
 PDE_APPLIED = True
@@ -31,6 +31,7 @@ RELATIVE_PLOT_RANGE = {
         "EJ230": {"x": (0, 11), "y": (25, 75)},
         "EJ232": {"x": (0, 25), "y": (20, 210)},
         "EJ232Q05": {"x": (0, 30), "y": (20, 200)},
+        "BC422": {"x": (0, 30), "y": (20, 200)},
     },
     "materials": {
         "1GeV": {"x": (0, 26), "y": (20, 200)},
